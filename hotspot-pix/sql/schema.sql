@@ -1,0 +1,37 @@
+CREATE DATABASE IF NOT EXISTS hotspot_pix CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE hotspot_pix;
+
+CREATE TABLE admins (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(190) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE plans (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  price_cents INT UNSIGNED NOT NULL,
+  duration_minutes INT UNSIGNED NOT NULL,
+  mikrotik_profile VARCHAR(80) NOT NULL DEFAULT 'default',
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE pix_charges (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  txid VARCHAR(35) NOT NULL UNIQUE,
+  plan_id INT UNSIGNED NOT NULL,
+  client_identifier VARCHAR(120) NOT NULL,
+  amount_cents INT UNSIGNED NOT NULL,
+  status ENUM('PENDING','PAID','EXPIRED','FAILED') NOT NULL DEFAULT 'PENDING',
+  inter_payload JSON NULL,
+  paid_at DATETIME NULL,
+  granted_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (plan_id) REFERENCES plans(id)
+);
+
+INSERT INTO plans (name, price_cents, duration_minutes, mikrotik_profile) VALUES
+('1 hora', 500, 60, 'default'), ('Diária', 1200, 1440, 'default');
