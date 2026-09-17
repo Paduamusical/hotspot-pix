@@ -1,0 +1,111 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/InterPixService.php';
+require_once __DIR__ . '/RouterService.php';
+
+function txid(): string { return bin2hex(random_bytes(16)); }
+
+function grant(PDO $db, array $charge): void {
+    if ($charge['granted_at']) return;
+    $plan = $db->prepare('SELECT duration_minutes,mikrotik_profile FROM plans WHERE id=?');
+    $plan->execute([$charge['plan_id']]);
+    $p = $plan->fetch(PDO::FETCH_ASSOC);
+    if (!$p) throw new RuntimeException('Plano não encontrado');
+    (new RouterService)->grantHotspotAccess($charge['client_identifier'], (int)$p['duration_minutes'], $p['mikrotik_profile']);
+    $db->prepare('UPDATE pix_charges SET granted_at=NOW() WHERE id=?')->execute([$charge['id']]);
+}
+
+try {
+    $db = db();
+    $body = input();
+    $action = $body['action'] ?? $_GET['action'] ?? '';
+
+    if ($action === 'create') {
+        $planId = filter_var($body['plan_id'] ?? $_GET['plan_id'] ?? null, FILTER_VALIDATE_INT);
+        $client = preg_replace('/[^a-zA-Z0-9:_.-]/', '', (string)($body['client'] ?? $_GET['client'] ?? ''));
+        if (!$planId || !$client) jsonResponse(['error' => 'Informe plano e identificador do dispositivo.'], 422);
+        $p = $db->prepare('SELECT * FROM plans WHERE id=? AND active=1');
+        $p->execute([$planId]); $plan = $p->fetch(PDO::FETCH_ASSOC);
+        if (!$plan) jsonResponse(['error' => 'Plano inválido.'], 404);
+
+        if (env('PAYMENT_MODE', 'simulation') === 'simulation') {
+            $id = 'SIM-' . strtoupper(substr(txid(), 0, 16));
+            try {
+                (new RouterService)->grantTemporaryAccess($client, 5, $plan['mikrotik_profile']);
+            } catch (Throwable $e) { error_log('Erro ao liberar acesso temporário: ' . $e->getMessage()); }
+            $db->prepare('INSERT INTO pix_charges(txid,plan_id,client_identifier,amount_cents,inter_payload) VALUES(?,?,?,?,?)')
+               ->execute([$id, $planId, $client, $plan['price_cents'], json_encode(['simulation' => true])]);
+            $fakePayload = '00020126580014BR.GOV.BCB.PIX0136' . $id . '5204000053039865802BR5913HOTSPOT-PIX6009SAOPAULO62070503***6304' . substr(md5($id), 0, 4);
+            jsonResponse(['txid' => $id, 'copy_paste' => $fakePayload, 'image' => null, 'expires_in' => 900, 'simulation' => true, 'message' => 'MODO SIMULAÇÃO - 5 minutos de internet liberados para pagamento.']);
+        }
+
+        if (env('PAYMENT_MODE') === 'mercadopago') {
+            jsonResponse(['error' => 'Mercado Pago ainda não configurado.'], 503);
+        }
+
+        if (env('PAYMENT_MODE') === 'inter') {
+            $id = txid();
+            $inter = new InterPixService;
+            $charge = $inter->createCharge($id, (int)$plan['price_cents']);
+            $db->prepare('INSERT INTO pix_charges(txid,plan_id,client_identifier,amount_cents,inter_payload) VALUES(?,?,?,?,?)')
+               ->execute([$id, $planId, $client, $plan['price_cents'], json_encode($charge)]);
+            $locationId = $charge['loc']['id'] ?? null;
+            if (!$locationId) throw new RuntimeException('Inter não retornou localização QR.');
+            $qr = $inter->getQrCode((int)$locationId);
+            try {
+                (new RouterService)->grantTemporaryAccess($client, 5, $plan['mikrotik_profile']);
+            } catch (Throwable $e) { error_log('Erro ao liberar acesso temporário: ' . $e->getMessage()); }
+            jsonResponse(['txid' => $id, 'copy_paste' => $qr['qrcode'], 'image' => $qr['imagemQrcode'] ?? null, 'expires_in' => $charge['calendario']['expiracao'] ?? 900]);
+        }
+
+        jsonResponse(['error' => 'PAYMENT_MODE inválido no .env.'], 500);
+    }
+
+    if ($action === 'status') {
+        $id = preg_replace('/[^a-zA-Z0-9-]/', '', (string)($body['txid'] ?? $_GET['txid'] ?? ''));
+        $stmt = $db->prepare('SELECT * FROM pix_charges WHERE txid=?');
+        $stmt->execute([$id]); $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) jsonResponse(['error' => 'Cobrança não encontrada'], 404);
+
+        if (env('PAYMENT_MODE', 'simulation') === 'simulation' && $row['status'] === 'PENDING') {
+            $elapsed = time() - strtotime($row['created_at']);
+            if ($elapsed >= 10) {
+                $db->prepare("UPDATE pix_charges SET status='PAID', paid_at=NOW(), inter_payload=? WHERE id=?")
+                   ->execute([json_encode(['simulation' => 'auto-paid']), $row['id']]);
+                $row['status'] = 'PAID';
+            }
+        }
+
+        if (env('PAYMENT_MODE') === 'inter' && $row['status'] === 'PENDING') {
+            $remote = (new InterPixService)->getCharge($id);
+            if (($remote['status'] ?? '') === 'CONCLUIDA') {
+                $db->prepare("UPDATE pix_charges SET status='PAID', paid_at=NOW(), inter_payload=? WHERE id=?")
+                   ->execute([json_encode($remote), $row['id']]);
+                $row['status'] = 'PAID';
+            }
+        }
+
+        if ($row['status'] === 'PAID') grant($db, $row);
+        jsonResponse(['status' => $row['status'], 'granted' => ($row['status'] === 'PAID'), 'simulation' => env('PAYMENT_MODE', 'simulation') === 'simulation']);
+    }
+
+    if ($action === 'simulate-payment') {
+        if (env('PAYMENT_MODE', 'simulation') !== 'simulation') jsonResponse(['error' => 'Modo simulação não está ativo'], 403);
+        $id = preg_replace('/[^a-zA-Z0-9-]/', '', (string)($body['txid'] ?? $_GET['txid'] ?? ''));
+        $stmt = $db->prepare('SELECT * FROM pix_charges WHERE txid=? AND status="PENDING"');
+        $stmt->execute([$id]); $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) jsonResponse(['error' => 'Cobrança não encontrada ou já paga'], 404);
+        $db->prepare("UPDATE pix_charges SET status='PAID', paid_at=NOW(), inter_payload=? WHERE id=?")
+           ->execute([json_encode(['simulation' => 'manual']), $row['id']]);
+        grant($db, $row);
+        jsonResponse(['status' => 'PAID', 'granted' => true, 'message' => 'Pagamento simulado e acesso liberado!']);
+    }
+
+    jsonResponse(['error' => 'Ação inválida'], 400);
+} catch (Throwable $e) {
+    error_log($e->getMessage());
+    jsonResponse(['error' => 'Não foi possível processar a solicitação.'], 502);
+}

@@ -1,0 +1,31 @@
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#333}
+.container{background:#fff;border-radius:15px;padding:40px 30px;max-width:400px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.3);text-align:center}
+.logo{font-size:28px;font-weight:bold;color:#1a1a2e;margin-bottom:10px}
+.subtitle{color:#666;font-size:14px;margin-bottom:30px}
+.plans{margin-bottom:20px}
+.plan{display:flex;justify-content:space-between;align-items:center;padding:12px 15px;border:2px solid #e0e0e0;border-radius:10px;margin-bottom:10px;cursor:pointer;transition:.3s;text-align:left}
+.plan:hover{border-color:#00b894;background:#f0fffe}
+.plan.selected{border-color:#00b894;background:#e0fffe}
+.plan input[type=radio]{display:none}
+.plan span{flex:1}
+.plan b{font-size:15px;color:#1a1a2e}
+.plan small{font-size:12px;color:#999}
+.plan strong{font-size:16px;color:#00b894}
+.label-text{display:block;text-align:left;font-size:13px;color:#666;margin-bottom:5px;font-weight:bold}
+input[type=text]{width:100%;padding:12px 15px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px;margin-bottom:5px;outline:none;transition:.3s}
+input[type=text]:focus{border-color:#6c5ce7;box-shadow:0 0 5px rgba(108,92,231,.3)}
+.hint{display:block;text-align:left;font-size:11px;color:#999;margin-bottom:15px}
+button{display:block;width:100%;padding:15px;background:linear-gradient(135deg,#00b894,#00cec9);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer;transition:.3s;margin-bottom:10px}
+button:hover{opacity:.9}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{background:linear-gradient(135deg,#6c5ce7,#a29bfe)}
+.btn-connect{background:linear-gradient(135deg,#fdcb6e,#e17055)}
+#payment{margin-top:20px;padding-top:20px;border-top:2px solid #f0f0f0}
+#payment h2{font-size:18px;color:#1a1a2e;margin-bottom:15px}
+#qr{max-width:200px;margin:0 auto 15px;display:block;border-radius:10px}
+.info-text{font-size:13px;color:#666;margin-bottom:10px}
+textarea{width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:10px;font-size:12px;font-family:monospace;resize:none;height:60px;margin-bottom:10px;outline:none}
+.status-text{font-size:14px;color:#666;margin-top:10px;font-weight:bold}
+.status-text.success{color:#00b894}
+.status-text.error{color:#e74c3c}

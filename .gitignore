@@ -1,0 +1,9 @@
+.env
+.env.*
+*.bak
+*.bak.*
+backups/
+*.log
+node_modules/
+.DS_Store
+*.pem

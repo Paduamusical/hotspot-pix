@@ -1,0 +1,16 @@
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:22px}
+.kpi-card{background:#0d2133;border:1px solid #284d66;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:6px}
+.kpi-label{color:#6b8aa8;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.kpi-value{font-size:1.6rem;font-weight:800;color:#40d5a2}
+.chart-container{display:flex;align-items:flex-end;gap:4px;height:200px;overflow-x:auto;padding-bottom:10px}
+.bar-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:32px;flex:1;height:100%}
+.bar{width:100%;max-width:28px;background:linear-gradient(180deg,#40d5a2,#2a9d7a);border-radius:6px 6px 0 0;min-height:3px;transition:height .3s ease}
+.bar-label{font-size:.6rem;color:#6b8aa8;margin-top:4px;white-space:nowrap}
+.data-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.data-table th{text-align:left;color:#6b8aa8;font-size:.72rem;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid #284d66}
+.data-table td{padding:8px 6px;border-bottom:1px solid #1a3a52}
+.badge{padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700}
+.badge-paid{background:#1a3a2e;color:#40d5a2}
+.badge-pending{background:#3a3a1a;color:#d5c44a}
+.badge-expired{background:#3a1a1a;color:#ff9e9e}
+@media(max-width:650px){.kpi-grid{grid-template-columns:repeat(2,1fr)}div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}}

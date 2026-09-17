@@ -1,0 +1,45 @@
+const plansEl=document.querySelector('#plans'),pay=document.querySelector('#pay'),client=document.querySelector('#client'),payment=document.querySelector('#payment'),statusEl=document.querySelector('#status'),connectBtn=document.querySelector('#connect-btn');
+let selected, timer; client.value=new URLSearchParams(location.search).get('client')||'';
+const brl=c=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(c/100);
+
+const voucherSection=document.createElement('section');
+voucherSection.id='voucher-section';
+voucherSection.innerHTML='<hr style="margin:1.5rem 0;border:none;border-top:1px solid rgba(255,255,255,.1)"><h2 style="font-size:1rem;margin:.5rem 0">Tenho um voucher VIP</h2><div style="display:flex;gap:.5rem"><input id="voucher-code" maxlength="32" placeholder="Digite o código do voucher" style="flex:1;text-transform:uppercase" autocomplete="off"><button id="voucher-btn" class="secondary">Ativar voucher</button></div><p id="voucher-msg" role="status" style="margin-top:.5rem;font-size:.85rem"></p>';
+document.querySelector('main').appendChild(voucherSection);
+
+document.querySelector('#voucher-btn').onclick=async()=>{
+  const code=document.querySelector('#voucher-code').value.trim();
+  const msg=document.querySelector('#voucher-msg');
+  if(!code){msg.textContent='Digite o código do voucher.';return;}
+  msg.textContent='Validando voucher...';
+  try{
+    const r=await fetch('api/pix.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'voucher',code,client:client.value})});
+    const j=await r.json();
+    if(r.ok){msg.textContent=j.message||'Voucher validado!';msg.style.color='#4ade80';setTimeout(()=>{msg.textContent='Acesso liberado!';},2000);}
+    else{msg.textContent=j.error||'Voucher inválido.';msg.style.color='#f87171';}
+  }catch(e){msg.textContent='Erro ao validar voucher.';msg.style.color='#f87171';}
+};
+
+fetch('api/plans.php').then(r=>r.json()).then(({plans})=>{
+  plansEl.innerHTML=plans.map((p,i)=>'<label class="plan"><span><input type="radio" name="plan" value="'+p.id+'" '+(i?'':'checked')+'> <b>'+p.name+'</b><br><small>'+p.duration_minutes+' minutos de acesso</small></span><strong>'+brl(p.price_cents)+'</strong></label>').join('');
+  selected=plans[0]?plans[0].id:null; plansEl.onchange=e=>selected=e.target.value; pay.disabled=!selected;
+}).catch(()=>plansEl.textContent='Não foi possível carregar os planos.');
+
+async function api(data){const r=await fetch('api/pix.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error(j.error||'Erro na operação');return j}
+pay.onclick=async()=>{
+  try{
+    pay.disabled=true;
+    const j=await api({action:'create',plan_id:selected,client:client.value});
+    document.querySelector('#pixCode').value=j.copy_paste;
+    if(j.image){document.querySelector('#qr').src=j.image.startsWith('data:image')?j.image:'data:image/png;base64,'+j.image;}else{document.querySelector('#qr').style.display='none';}
+    payment.hidden=false;
+    statusEl.textContent=j.simulation?'Pague o PIX para liberar o acesso (auto-pagamento em 10s).':'Abra o app do seu banco e pague o PIX para liberar o acesso.';
+    timer=setInterval(()=>check(j.txid),3000); check(j.txid);
+  }catch(e){alert(e.message);pay.disabled=false;}
+};
+async function check(txid){
+  try{const j=await api({action:'status',txid});
+    if(j.status==='PAID'){clearInterval(timer);statusEl.textContent='Pagamento confirmado! Liberando acesso...';if(j.login_url){setTimeout(()=>{const dst=j.dst||('https://hotspot-pix.accesnet.com.br?client='+client.value);window.location.href=j.login_url+'?username='+encodeURIComponent(j.username)+'&password='+encodeURIComponent(j.password)+'&dst='+encodeURIComponent(dst);},1500);}}
+  }catch(e){console.warn(e)}
+}
+document.querySelector('#copy').onclick=()=>navigator.clipboard.writeText(document.querySelector('#pixCode').value).then(()=>statusEl.textContent='Codigo PIX copiado.');
